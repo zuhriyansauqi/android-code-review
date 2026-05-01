@@ -62,6 +62,23 @@ Apply these checks against the diff:
 - Heavy work on `Dispatchers.IO` or `Default`, not `Main`
 - State survives configuration changes (`rememberSaveable`, ViewModel)
 
+### ANR & Responsiveness
+- No network or disk IO on main thread without `withContext(Dispatchers.IO)`
+- `SharedPreferences.apply()` over `commit()` (commit blocks the calling thread)
+- No heavy work in `onBind`, `onDraw`, or `onMeasure`
+- `BroadcastReceiver.onReceive` must not block (10s ANR limit)
+- `ContentProvider` queries must not perform synchronous network calls
+- No `synchronized` blocks that hold locks across IO operations
+- No blocking calls in `Application.onCreate` (delays app start)
+
+### Memory Leaks
+- No static references to Activity, Fragment, View, or Context
+- Inner classes in Activity/Fragment should be static or use `WeakReference`
+- Listeners, callbacks, and observers unregistered in `onDestroy`/`onCleared`/`onDestroyView`
+- No Context stored in ViewModel (use `Application` context if needed)
+- `DisposableEffect` includes proper cleanup in `onDispose`
+- No long-lived coroutines holding references to destroyed scopes
+
 ### Jetpack Compose
 - Side-effects keyed correctly (`LaunchedEffect`, `DisposableEffect`)
 - Lambdas wrapped with `remember` to avoid recomposition
