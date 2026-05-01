@@ -1,7 +1,7 @@
 ---
 name: android-code-review
 description: "Review Android PRs from a GitHub URL: fetch diff, apply Android checks, post inline comments."
-version: 1.0.3
+version: 1.0.4
 author: Mas Ryy
 license: MIT
 required_environment_variables:
@@ -192,7 +192,7 @@ The script handles everything:
 - positive observation
 
 ---
-*Reviewed by Mas Ryy (android-code-review v1.0.3)*
+*Reviewed by Mas Ryy (android-code-review v1.0.4)*
 ```
 
 > Severity sections with zero items are omitted automatically.

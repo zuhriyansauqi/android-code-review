@@ -16,6 +16,8 @@ Give the agent a GitHub PR URL. The skill will:
 2. **Review** against an Android-specific checklist defined in `SKILL.md`, covering:
    - Correctness & logic
    - Lifecycle & threading (coroutine scoping, `repeatOnLifecycle`, no `GlobalScope`)
+   - ANR & responsiveness (main thread IO, blocking calls, `SharedPreferences.commit`)
+   - Memory leaks (static Context refs, unregistered listeners, ViewModel leaks)
    - Jetpack Compose (side-effects, recomposition, state hoisting)
    - Architecture (MVVM/MVI, Clean Architecture, layer boundaries)
    - Security (no hardcoded secrets, input validation)
