@@ -29,6 +29,11 @@ MAX_LINE_SNAP_DISTANCE = 20
 _token_cache = None
 
 
+class ReviewError(Exception):
+    """Raised on unrecoverable errors (API failures, bad input, etc.)."""
+    pass
+
+
 def get_token():
     global _token_cache
     if _token_cache:
@@ -46,16 +51,38 @@ def get_token():
         return _token_cache
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
-    print("Error: No GITHUB_TOKEN and gh CLI not authenticated.", file=sys.stderr)
-    sys.exit(1)
+    raise ReviewError("No GITHUB_TOKEN and gh CLI not authenticated.")
 
 
 def parse_pr_url(url):
     m = re.match(r"https://github\.com/([^/]+)/([^/]+)/pull/(\d+)", url)
     if not m:
-        print(f"Error: Invalid PR URL: {url}", file=sys.stderr)
-        sys.exit(1)
+        raise ReviewError(f"Invalid PR URL: {url}")
     return m.group(1), m.group(2), int(m.group(3))
+
+
+_rate_limit_remaining = None
+_rate_limit_reset = None
+
+
+def _check_rate_limit():
+    """Sleep until reset if we know we're out of requests."""
+    global _rate_limit_remaining, _rate_limit_reset
+    if _rate_limit_remaining is not None and _rate_limit_remaining <= 1 and _rate_limit_reset:
+        wait = max(0, _rate_limit_reset - time.time()) + 1
+        print(f"Rate limit nearly exhausted, waiting {wait:.0f}s until reset.", file=sys.stderr)
+        time.sleep(wait)
+
+
+def _update_rate_limit(headers):
+    """Track rate limit state from response headers."""
+    global _rate_limit_remaining, _rate_limit_reset
+    remaining = headers.get("X-RateLimit-Remaining")
+    reset = headers.get("X-RateLimit-Reset")
+    if remaining is not None:
+        _rate_limit_remaining = int(remaining)
+    if reset is not None:
+        _rate_limit_reset = int(reset)
 
 
 def api_request(path, method="GET", body=None, accept=None, max_retries=3):
@@ -69,30 +96,39 @@ def api_request(path, method="GET", body=None, accept=None, max_retries=3):
     url = f"https://api.github.com{path}" if path.startswith("/") else path
     is_diff = accept == "application/vnd.github.v3.diff"
 
+    _check_rate_limit()
+
     for attempt in range(max_retries):
         try:
             data = json.dumps(body).encode() if body else None
             req = urllib.request.Request(url, data=data, headers=headers, method=method)
             with urllib.request.urlopen(req, timeout=API_TIMEOUT) as resp:
+                _update_rate_limit(resp.headers)
                 raw = resp.read().decode()
                 if is_diff:
                     return raw
                 return json.loads(raw) if raw else {}
         except urllib.error.HTTPError as e:
             err_body = e.read().decode() if e.fp else ""
-            if attempt < max_retries - 1 and e.code in (502, 503, 429):
-                if e.code == 429:
-                    retry_after = e.headers.get("Retry-After")
-                    delay = int(retry_after) if retry_after else (attempt + 1) * 2
-                else:
-                    delay = (attempt + 1) * 2
+            retryable = (502, 503, 429)
+            # GitHub secondary rate limit: 403 with retry-after
+            is_secondary_rate_limit = e.code == 403 and e.headers.get("Retry-After")
+            if attempt < max_retries - 1 and (e.code in retryable or is_secondary_rate_limit):
+                retry_after = e.headers.get("Retry-After")
+                delay = int(retry_after) if retry_after else (attempt + 1) * 2
+                print(f"Retryable API error {e.code}, retrying in {delay}s (attempt {attempt + 1}/{max_retries}).", file=sys.stderr)
                 time.sleep(delay)
                 continue
-            print(f"API error {e.code}: {err_body}", file=sys.stderr)
-            sys.exit(1)
+            raise ReviewError(f"API error {e.code}: {err_body}")
+        except urllib.error.URLError as e:
+            if attempt < max_retries - 1:
+                delay = (attempt + 1) * 2
+                print(f"Network error: {e.reason}, retrying in {delay}s (attempt {attempt + 1}/{max_retries}).", file=sys.stderr)
+                time.sleep(delay)
+                continue
+            raise ReviewError(f"Network error after {max_retries} attempts: {e.reason}")
 
-    print(f"API request failed after {max_retries} retries: {url}", file=sys.stderr)
-    sys.exit(1)
+    raise ReviewError(f"API request failed after {max_retries} retries: {url}")
 
 
 def fetch_pr_files(owner, repo, pr_number):
@@ -328,8 +364,7 @@ def cmd_fetch_file(pr_url, file_path):
     ref = pr["head"]["ref"]
     content = api_request(f"/repos/{owner}/{repo}/contents/{file_path}?ref={ref}")
     if not isinstance(content, dict):
-        print(f"Error: Unexpected response for {file_path}", file=sys.stderr)
-        sys.exit(1)
+        raise ReviewError(f"Unexpected response for {file_path}")
     encoding = content.get("encoding", "")
     if encoding == "base64":
         print(base64.b64decode(content["content"]).decode())
@@ -341,23 +376,27 @@ def cmd_fetch_file(pr_url, file_path):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(__doc__)
-        sys.exit(1)
+    try:
+        if len(sys.argv) < 3:
+            print(__doc__)
+            sys.exit(1)
 
-    cmd = sys.argv[1]
-    if cmd == "fetch":
-        cmd_fetch(sys.argv[2])
-    elif cmd == "post":
-        if len(sys.argv) < 4:
-            print("Usage: review_pr.py post <pr_url> <findings.json>", file=sys.stderr)
+        cmd = sys.argv[1]
+        if cmd == "fetch":
+            cmd_fetch(sys.argv[2])
+        elif cmd == "post":
+            if len(sys.argv) < 4:
+                print("Usage: review_pr.py post <pr_url> <findings.json>", file=sys.stderr)
+                sys.exit(1)
+            cmd_post(sys.argv[2], sys.argv[3])
+        elif cmd == "fetch-file":
+            if len(sys.argv) < 4:
+                print("Usage: review_pr.py fetch-file <pr_url> <file_path>", file=sys.stderr)
+                sys.exit(1)
+            cmd_fetch_file(sys.argv[2], sys.argv[3])
+        else:
+            print(f"Unknown command: {cmd}", file=sys.stderr)
             sys.exit(1)
-        cmd_post(sys.argv[2], sys.argv[3])
-    elif cmd == "fetch-file":
-        if len(sys.argv) < 4:
-            print("Usage: review_pr.py fetch-file <pr_url> <file_path>", file=sys.stderr)
-            sys.exit(1)
-        cmd_fetch_file(sys.argv[2], sys.argv[3])
-    else:
-        print(f"Unknown command: {cmd}", file=sys.stderr)
+    except ReviewError as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

@@ -202,6 +202,24 @@ The script handles everything:
 - **Request Changes** — any blocker or warning
 - **Comment** — only suggestions and nits
 
+## Error Handling
+
+If any script command exits with a non-zero code, **do NOT silently retry or hallucinate results**. Read the stderr output and respond to the user based on the error:
+
+| Error message contains | Tell the user |
+|---|---|
+| `API error 401` | "GitHub token is invalid or expired. Please check your `GITHUB_TOKEN` or re-authenticate with `gh auth login`." |
+| `API error 403` / `rate limit` | "GitHub API rate limit reached. Please wait a few minutes and try again." |
+| `API error 404` | "PR not found. Please check the URL — the repo may be private or the PR number may be wrong." |
+| `API error 422` | "GitHub rejected the review payload. This is usually a bug in the review script — please report it." |
+| `Network error` | "Could not reach GitHub. Please check your internet connection and try again." |
+| `No GITHUB_TOKEN` | "No GitHub token found. Set the `GITHUB_TOKEN` environment variable or run `gh auth login`." |
+| `Invalid PR URL` | "That doesn't look like a valid GitHub PR URL. Expected format: `https://github.com/owner/repo/pull/123`" |
+
+For any other error, show the stderr output to the user and suggest they retry.
+
+**Never** generate fake review findings if the fetch or post step fails.
+
 ## Large PRs (>50 files)
 
 Ask the user whether to:
