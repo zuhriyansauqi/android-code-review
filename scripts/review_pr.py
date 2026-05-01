@@ -13,6 +13,7 @@ Requires: GITHUB_TOKEN env var or gh CLI authenticated.
 """
 
 import base64
+import bisect
 import json
 import os
 import re
@@ -150,7 +151,7 @@ def fetch_pr_files(owner, repo, pr_number):
 def parse_diff_lines(diff_text):
     """Parse diff to map file+line to valid commentable lines.
 
-    Returns dict: { "path": { line_number: "LEFT"|"RIGHT" } }
+    Returns dict: { "path": { "map": {line: side}, "sorted": [line, ...] } }
     """
     valid = {}
     current_file = None
@@ -161,39 +162,52 @@ def parse_diff_lines(diff_text):
             m = re.search(r" b/(.+)$", line)
             if m:
                 current_file = m.group(1)
-                valid[current_file] = {}
+                valid[current_file] = {"map": {}, "sorted": []}
         elif line.startswith("@@") and current_file:
             m = re.search(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", line)
             if m:
                 old_line = int(m.group(1))
                 new_line = int(m.group(2))
         elif current_file and current_file in valid:
+            fmap = valid[current_file]["map"]
             if line.startswith("+") and not line.startswith("+++"):
-                valid[current_file][new_line] = "RIGHT"
+                fmap[new_line] = "RIGHT"
                 new_line += 1
             elif line.startswith("-") and not line.startswith("---"):
-                valid[current_file][old_line] = "LEFT"
+                fmap[old_line] = "LEFT"
                 old_line += 1
             elif not line.startswith("\\"):
-                # Context lines are valid on both sides; prefer RIGHT for commenting
-                valid[current_file][new_line] = "RIGHT"
+                fmap[new_line] = "RIGHT"
                 old_line += 1
                 new_line += 1
+
+    # Pre-sort once per file
+    for path in valid:
+        valid[path]["sorted"] = sorted(valid[path]["map"])
 
     return valid
 
 
-def find_nearest_valid_line(valid_lines, target_line):
-    """Find the closest valid line number to the target within MAX_LINE_SNAP_DISTANCE."""
-    if not valid_lines:
+def find_nearest_valid_line(file_entry, target_line):
+    """Find the closest valid line via bisect — O(log V)."""
+    if not file_entry:
         return None, None
-    if target_line in valid_lines:
-        return target_line, valid_lines[target_line]
-    lines = sorted(valid_lines.keys())
-    closest = min(lines, key=lambda ln: abs(ln - target_line))
+    line_map = file_entry["map"]
+    if target_line in line_map:
+        return target_line, line_map[target_line]
+    sorted_lines = file_entry["sorted"]
+    if not sorted_lines:
+        return None, None
+    idx = bisect.bisect_left(sorted_lines, target_line)
+    candidates = []
+    if idx < len(sorted_lines):
+        candidates.append(sorted_lines[idx])
+    if idx > 0:
+        candidates.append(sorted_lines[idx - 1])
+    closest = min(candidates, key=lambda ln: abs(ln - target_line))
     if abs(closest - target_line) > MAX_LINE_SNAP_DISTANCE:
         return None, None
-    return closest, valid_lines[closest]
+    return closest, line_map[closest]
 
 
 def cmd_fetch(pr_url):
@@ -270,7 +284,7 @@ def cmd_post(pr_url, findings_file):
         if fix:
             body += f"\n\n**Fix**:\n```kotlin\n{fix}\n```"
 
-        file_lines = valid_lines.get(path, {})
+        file_lines = valid_lines.get(path)
 
         # line 0 = general finding (e.g., missing tests), summary only
         if line == 0:
