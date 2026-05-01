@@ -1,18 +1,19 @@
 # Android Code Review
 
-Review Android PRs from a GitHub URL: fetch diff, apply Android-specific checks, and post inline comments.
+A [Hermes Agent](https://github.com/nousresearch/hermes-agent) skill that reviews Android PRs from a GitHub URL — fetches the diff, applies Android-specific checks, and posts inline comments.
 
 ## Requirements
 
+- Hermes Agent runtime
 - Python 3 (see `.python-version`)
 - `GITHUB_TOKEN` environment variable with repo access
 
-## Usage
+## How It Works
 
-Provide a GitHub PR URL and the skill will:
+Give the agent a GitHub PR URL. The skill will:
 
-1. **Fetch** the PR diff and metadata
-2. **Review** against an Android-specific checklist covering:
+1. **Fetch** the PR diff and metadata via `scripts/review_pr.py`
+2. **Review** against an Android-specific checklist defined in `SKILL.md`, covering:
    - Correctness & logic
    - Lifecycle & threading (coroutine scoping, `repeatOnLifecycle`, no `GlobalScope`)
    - Jetpack Compose (side-effects, recomposition, state hoisting)
@@ -21,7 +22,7 @@ Provide a GitHub PR URL and the skill will:
    - Performance (recomposition, pagination, allocations)
    - Data & persistence (Room migrations, serialization)
    - Testing (coverage, `TestDispatcher`, no flaky patterns)
-3. **Post** findings as inline PR comments with an auto-determined verdict
+3. **Post** findings as inline PR comments with an auto-determined verdict and summary
 
 ### Verdict Logic
 
@@ -38,10 +39,21 @@ Provide a GitHub PR URL and the skill will:
 - **suggestion** — Improvement idea
 - **nit** — Style/preference
 
+## Project Structure
+
+```
+├── SKILL.md             # Agent directive — review workflow and checklist
+├── scripts/
+│   └── review_pr.py     # GitHub API helper (fetch, post, fetch-file)
+├── pyproject.toml       # Project metadata
+├── .python-version      # Python version pin for uv
+└── README.md
+```
+
 ## Tags
 
 `Android` `Code-Review` `Pull-Requests` `Kotlin` `Compose` `Architecture` `Quality`
 
 ## License
 
-MIT
+[MIT](LICENSE.md)

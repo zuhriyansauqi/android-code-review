@@ -1,7 +1,7 @@
 ---
 name: android-code-review
 description: "Review Android PRs from a GitHub URL: fetch diff, apply Android checks, post inline comments."
-version: 1.0.2
+version: 1.0.3
 author: Mas Ryy
 license: MIT
 required_environment_variables:
@@ -147,7 +147,38 @@ The script handles everything:
 - Validates line numbers against the actual diff
 - Chooses verdict automatically (Approve / Request Changes / Comment) based on severities
 - Posts atomic review with inline comments
-- Posts summary comment in the mandatory template
+- Posts summary comment using this template:
+
+### Summary Template
+
+```markdown
+## Android Code Review Summary
+
+**PR**: {title} (#{number})
+**Author**: @{author}
+**Verdict**: {verdict}
+**Stats**: {changed_files} files changed, +{additions} -{deletions}
+
+### 🔴 Blockers (N)
+- **file:line** — title
+
+### 🟡 Warnings (N)
+- **file:line** — title
+
+### 💡 Suggestions (N)
+- **file:line** — title
+
+### 🟢 Nits (N)
+- **file:line** — title
+
+### ✅ Looks Good
+- positive observation
+
+---
+*Reviewed by Mas Ryy (android-code-review v1.0.3)*
+```
+
+> Severity sections with zero items are omitted automatically.
 
 ### Verdict Logic (handled by script)
 - **Approve** — no blockers, no warnings
