@@ -131,10 +131,11 @@ Write your findings to `/tmp/review_findings.json` using **exactly** this format
 
 **Rules:**
 - `severity`: one of `blocker`, `warning`, `suggestion`, `nit`
-- `line`: the line number from the diff where the issue is (the script auto-snaps to the nearest valid diff line)
+- `line`: the line number from the diff where the issue is (the script auto-snaps to the nearest valid diff line). Set to `0` for general findings that don't target a specific line (e.g., missing unit tests) — these will appear only in the summary, not as inline comments.
 - `looks_good`: always include at least one positive observation
 - `fix`: optional — include Kotlin code when you have a concrete suggestion
 - If no issues found, use empty `findings` array and still include `looks_good`
+- **Missing unit tests**: use `line: 0`. Do NOT attach to a random line in the file.
 
 ## Step 5: Post the Review
 

@@ -235,6 +235,11 @@ def cmd_post(pr_url, findings_file):
             body += f"\n\n**Fix**:\n```kotlin\n{fix}\n```"
 
         file_lines = valid_lines.get(path, {})
+
+        # line 0 = general finding (e.g., missing tests), summary only
+        if line == 0:
+            continue
+
         actual_line, side = find_nearest_valid_line(file_lines, line)
 
         if actual_line is None:
