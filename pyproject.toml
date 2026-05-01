@@ -1,6 +1,6 @@
 [project]
 name = "android-code-review"
-version = "1.0.5"
+version = "1.1.0"
 description = "Review Android PRs from a GitHub URL: fetch diff, apply Android checks, post inline comments."
 readme = "README.md"
 requires-python = ">=3.14"

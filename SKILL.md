@@ -1,7 +1,7 @@
 ---
 name: android-code-review
 description: "Review Android PRs from a GitHub URL: fetch diff, apply Android checks, post inline comments."
-version: 1.0.5
+version: 1.1.0
 author: Mas Ryy
 license: MIT
 required_environment_variables:
@@ -192,7 +192,7 @@ The script handles everything:
 - positive observation
 
 ---
-*Reviewed by Mas Ryy (android-code-review v1.0.5)*
+*Reviewed by Mas Ryy (android-code-review v1.1.0)*
 ```
 
 > Severity sections with zero items are omitted automatically.
@@ -220,8 +220,36 @@ For any other error, show the stderr output to the user and suggest they retry.
 
 **Never** generate fake review findings if the fetch or post step fails.
 
-## Large PRs (>50 files)
+## Large PRs
 
-Ask the user whether to:
-- Review in batches (by module or feature)
-- Focus on specific areas (e.g., "just threading and lifecycle")
+After Step 1, count the total diff lines (`additions + deletions` from the PR metadata).
+
+### Thresholds
+
+| Diff lines | Strategy |
+|---|---|
+| ≤10,000 | **Single pass** — review all files in one go |
+| 10,001–20,000 | **Parallel subagents** — auto-batch by top-level directory |
+| >20,000 | **Ask user first** — suggest narrowing scope or batching by module |
+
+### Parallel Review via `delegate_task`
+
+When batching, group changed files by their top-level directory (e.g., `app/`, `core/`, `data/`). Spawn subagents with:
+
+```python
+delegate_task(tasks=[
+    {
+        "goal": "Review these Android files against the checklist and return findings JSON",
+        "context": "<checklist from Step 3>\n\n<diff for this batch's files only>",
+        "toolsets": ["terminal", "file"]
+    },
+    # ... one per batch
+])
+```
+
+**Rules:**
+- Each subagent receives the **full checklist** and only its batch's slice of the diff
+- Target ~30 files or ~5,000 diff lines per batch (whichever is smaller)
+- After all subagents return, **merge** their findings into a single `/tmp/review_findings.json`
+- Run Step 5 (post) **once** — do not post partial reviews
+- If a subagent fails, include its batch files in the summary as "not reviewed" and tell the user

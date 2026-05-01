@@ -23,7 +23,7 @@ import time
 import urllib.request
 import urllib.error
 
-VERSION = "1.0.5"
+VERSION = "1.1.0"
 API_TIMEOUT = 30
 MAX_LINE_SNAP_DISTANCE = 20
 

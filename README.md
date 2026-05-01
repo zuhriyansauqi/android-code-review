@@ -52,10 +52,20 @@ If a request still fails after retries, the agent responds with a clear, actiona
 ```
 ├── SKILL.md             # Agent directive — review workflow and checklist
 ├── scripts/
+│   ├── __init__.py
 │   └── review_pr.py     # GitHub API helper (fetch, post, fetch-file)
+├── tests/
+│   ├── __init__.py
+│   └── test_review_pr.py
 ├── pyproject.toml       # Project metadata
 ├── .python-version      # Python version pin for uv
 └── README.md
+```
+
+## Testing
+
+```bash
+uv run python -m unittest tests.test_review_pr -v
 ```
 
 ## Tags
