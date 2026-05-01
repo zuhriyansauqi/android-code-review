@@ -1,0 +1,9 @@
+[project]
+name = "android-code-review"
+version = "1.0.2"
+description = "Review Android PRs from a GitHub URL: fetch diff, apply Android checks, post inline comments."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+authors = [{ name = "Mas Ryy" }]
+dependencies = []
