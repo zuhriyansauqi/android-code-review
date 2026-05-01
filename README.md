@@ -41,6 +41,12 @@ Give the agent a GitHub PR URL. The skill will:
 - **suggestion** — Improvement idea
 - **nit** — Style/preference
 
+## Error Handling
+
+The script retries automatically on transient failures (502, 503, 429, network errors) with backoff. It also handles GitHub's secondary rate limits (403 + `Retry-After`) and proactively pauses when `X-RateLimit-Remaining` is nearly exhausted.
+
+If a request still fails after retries, the agent responds with a clear, actionable message (e.g., invalid token, rate limit, PR not found). See the Error Handling section in `SKILL.md` for the full mapping.
+
 ## Project Structure
 
 ```
