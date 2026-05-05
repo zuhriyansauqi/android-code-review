@@ -1,7 +1,7 @@
 ---
 name: android-code-review
 description: "Review Android PRs from a GitHub URL: fetch diff, apply Android checks, post inline comments."
-version: 1.1.0
+version: 1.2.0
 author: Mas Ryy
 license: MIT
 required_environment_variables:
@@ -42,7 +42,23 @@ Prioritize:
 - Room entities when migrations or DAOs change
 - Nav graph / route constants when navigation changes
 
-**Do NOT fetch the entire repository.** Only files directly referenced by the diff.
+### Search for Callers (upward context)
+
+If the diff modifies a public API — function signature, new parameter, return type, or visibility change — search for callers to verify correctness:
+
+```bash
+python3 ${HERMES_SKILL_DIR}/scripts/review_pr.py search "<PR_URL>" "ClassName.methodName"
+```
+
+This returns file paths and code fragments showing usages. Then `fetch-file` the most relevant callers.
+
+Use search when:
+- A `suspend fun` is added/changed — verify callers use the correct dispatcher
+- A function gains a new parameter — check if all call sites are updated
+- A ViewModel exposes new state — confirm the UI layer observes it
+- A navigation route changes — verify the nav graph and trigger points
+
+**Do NOT fetch the entire repository.** Only files directly referenced by the diff or returned by search.
 
 ## Step 3: Review Against the Checklist
 
@@ -192,7 +208,7 @@ The script handles everything:
 - positive observation
 
 ---
-*Reviewed by Mas Ryy (android-code-review v1.1.0)*
+*Reviewed by Mas Ryy (android-code-review v1.2.0)*
 ```
 
 > Severity sections with zero items are omitted automatically.

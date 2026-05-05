@@ -13,7 +13,8 @@ A [Hermes Agent](https://github.com/nousresearch/hermes-agent) skill that review
 Give the agent a GitHub PR URL. The skill will:
 
 1. **Fetch** the PR diff and metadata via `scripts/review_pr.py`
-2. **Review** against an Android-specific checklist defined in `SKILL.md`, covering:
+2. **Search** for callers/usages when the diff modifies public APIs (uses GitHub code search)
+3. **Review** against an Android-specific checklist defined in `SKILL.md`, covering:
    - Correctness & logic
    - Lifecycle & threading (coroutine scoping, `repeatOnLifecycle`, no `GlobalScope`)
    - ANR & responsiveness (main thread IO, blocking calls, `SharedPreferences.commit`)
@@ -24,7 +25,7 @@ Give the agent a GitHub PR URL. The skill will:
    - Performance (recomposition, pagination, allocations)
    - Data & persistence (Room migrations, serialization)
    - Testing (coverage, `TestDispatcher`, no flaky patterns)
-3. **Post** findings as inline PR comments with an auto-determined verdict and summary
+4. **Post** findings as inline PR comments with an auto-determined verdict and summary
 
 ### Verdict Logic
 
@@ -53,7 +54,7 @@ If a request still fails after retries, the agent responds with a clear, actiona
 ├── SKILL.md             # Agent directive — review workflow and checklist
 ├── scripts/
 │   ├── __init__.py
-│   └── review_pr.py     # GitHub API helper (fetch, post, fetch-file)
+│   └── review_pr.py     # GitHub API helper (fetch, search, post, fetch-file)
 ├── tests/
 │   ├── __init__.py
 │   └── test_review_pr.py

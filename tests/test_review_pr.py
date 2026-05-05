@@ -15,6 +15,7 @@ from scripts.review_pr import (
     _update_rate_limit,
     api_request,
     build_summary,
+    cmd_search,
     find_nearest_valid_line,
     get_token,
     parse_diff_lines,
@@ -463,6 +464,63 @@ class TestIntegrationParseDiffAndSnap(unittest.TestCase):
         entry = valid.get("nonexistent.kt")
         line, side = find_nearest_valid_line(entry, 10)
         self.assertIsNone(line)
+
+
+class TestCmdSearch(unittest.TestCase):
+    def setUp(self):
+        review_pr._token_cache = "fake-token"
+        review_pr._rate_limit_remaining = None
+        review_pr._rate_limit_reset = None
+
+    def tearDown(self):
+        review_pr._token_cache = None
+
+    @patch("scripts.review_pr.api_request")
+    def test_search_returns_results(self, mock_api):
+        mock_api.return_value = {
+            "total_count": 2,
+            "items": [
+                {
+                    "path": "app/src/main/java/com/example/Caller.kt",
+                    "html_url": "https://github.com/user/repo/blob/main/Caller.kt",
+                    "text_matches": [{"fragment": "repository.login(creds)"}],
+                },
+                {
+                    "path": "app/src/test/java/com/example/CallerTest.kt",
+                    "html_url": "https://github.com/user/repo/blob/main/CallerTest.kt",
+                    "text_matches": [],
+                },
+            ],
+        }
+        import io
+        from contextlib import redirect_stdout
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cmd_search("https://github.com/user/repo/pull/1", "login")
+
+        import json
+        output = json.loads(buf.getvalue())
+        self.assertEqual(output["total"], 2)
+        self.assertEqual(len(output["results"]), 2)
+        self.assertEqual(output["results"][0]["path"], "app/src/main/java/com/example/Caller.kt")
+        self.assertEqual(output["results"][0]["fragments"], ["repository.login(creds)"])
+        self.assertNotIn("fragments", output["results"][1])
+
+    @patch("scripts.review_pr.api_request")
+    def test_search_empty_results(self, mock_api):
+        mock_api.return_value = {"total_count": 0, "items": []}
+        import io
+        from contextlib import redirect_stdout
+        import json
+
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cmd_search("https://github.com/user/repo/pull/1", "nonExistentSymbol")
+
+        output = json.loads(buf.getvalue())
+        self.assertEqual(output["total"], 0)
+        self.assertEqual(output["results"], [])
 
 
 if __name__ == "__main__":

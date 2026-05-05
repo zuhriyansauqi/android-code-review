@@ -23,7 +23,7 @@ import time
 import urllib.request
 import urllib.error
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 API_TIMEOUT = 30
 MAX_LINE_SNAP_DISTANCE = 20
 
@@ -389,6 +389,23 @@ def cmd_fetch_file(pr_url, file_path):
         print(content.get("content", ""))
 
 
+def cmd_search(pr_url, query):
+    """Search for code usages/callers in the repo via GitHub code search API."""
+    owner, repo, _ = parse_pr_url(pr_url)
+    search_query = f"{query} repo:{owner}/{repo}"
+    result = api_request(f"/search/code?q={urllib.request.quote(search_query)}&per_page=20",
+                         accept="application/vnd.github.v3.text-match+json")
+    items = result.get("items", [])
+    output = []
+    for item in items:
+        entry = {"path": item["path"], "url": item["html_url"]}
+        matches = item.get("text_matches", [])
+        if matches:
+            entry["fragments"] = [m["fragment"] for m in matches[:3]]
+        output.append(entry)
+    print(json.dumps({"total": result.get("total_count", 0), "results": output}, indent=2))
+
+
 if __name__ == "__main__":
     try:
         if len(sys.argv) < 3:
@@ -408,6 +425,11 @@ if __name__ == "__main__":
                 print("Usage: review_pr.py fetch-file <pr_url> <file_path>", file=sys.stderr)
                 sys.exit(1)
             cmd_fetch_file(sys.argv[2], sys.argv[3])
+        elif cmd == "search":
+            if len(sys.argv) < 4:
+                print("Usage: review_pr.py search <pr_url> <query>", file=sys.stderr)
+                sys.exit(1)
+            cmd_search(sys.argv[2], sys.argv[3])
         else:
             print(f"Unknown command: {cmd}", file=sys.stderr)
             sys.exit(1)
