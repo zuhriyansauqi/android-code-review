@@ -1,7 +1,7 @@
 ---
 name: android-code-review
 description: "Review Android PRs from a GitHub URL: fetch diff, apply Android checks, post inline comments."
-version: 1.2.0
+version: 1.3.0
 author: Mas Ryy
 license: MIT
 required_environment_variables:
@@ -217,6 +217,20 @@ The script handles everything:
 - **Approve** — no blockers, no warnings
 - **Request Changes** — any blocker or warning
 - **Comment** — only suggestions and nits
+
+### Overriding the verdict
+
+`REQUEST_CHANGES` is a **merge-blocking state** on a protected branch. The automatic rule keys off severity alone, so it cannot tell a demonstrated defect from an open question — but many findings are the latter ("does the API filter drafts?", "is the v5 route deployed?"). Posting those as Request Changes blocks a colleague's merge over something nobody has confirmed yet, and on repos with required conversation resolution it also forces the thread to be resolved before merge.
+
+Set `REVIEW_EVENT` to post your findings without blocking:
+
+```bash
+REVIEW_EVENT=COMMENT python3 ${HERMES_SKILL_DIR}/scripts/review_pr.py post "<PR_URL>" /tmp/review_findings.json
+```
+
+Accepted values: `APPROVE`, `COMMENT`, `REQUEST_CHANGES` (case-insensitive). An unrecognised value exits with an error rather than guessing. Omitting it leaves the default rule above untouched.
+
+**When to override.** Use `COMMENT` when your warnings are questions the diff cannot answer, and leave the default when a warning is a defect you have actually demonstrated in the code. Severity should describe the defect; confidence describes whether you have the right to block on it, and the two are not the same axis. The inline comments and summary are unaffected either way — only the review state changes.
 
 ## Error Handling
 

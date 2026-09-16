@@ -1,11 +1,12 @@
 """Tests for scripts/review_pr.py"""
 
 import io
+import json
 import os
 import time
 import unittest
 from email.message import Message
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 from urllib.error import HTTPError, URLError
 
 import scripts.review_pr as review_pr
@@ -15,6 +16,7 @@ from scripts.review_pr import (
     _update_rate_limit,
     api_request,
     build_summary,
+    cmd_post,
     cmd_search,
     find_nearest_valid_line,
     get_token,
@@ -439,6 +441,65 @@ class TestVerdictLogic(unittest.TestCase):
         self.assertEqual(
             self._verdict(["nit", "warning", "suggestion"]), "REQUEST_CHANGES"
         )
+
+
+class TestVerdictOverride(unittest.TestCase):
+    """REVIEW_EVENT lets a run report findings without entering a blocking state."""
+
+    def _cmd_post_event(self, severities, override=None):
+        """Run cmd_post far enough to capture the review event it would send."""
+        findings = {
+            "findings": [
+                {"file": "A.kt", "line": 1, "severity": s, "title": "t"}
+                for s in severities
+            ],
+            "looks_good": ["ok"],
+        }
+        sent = []
+        diff = SAMPLE_DIFF
+
+        def fake_api(path, method="GET", body=None, accept=None, max_retries=3):
+            if accept and "diff" in accept:
+                return diff
+            if method == "POST" and path.endswith("/reviews"):
+                sent.append(body["event"])
+                return {}
+            if method == "POST":
+                return {}
+            return {
+                "title": "T", "number": 1, "user": {"login": "dev"},
+                "head": {"sha": "abc"}, "changed_files": 1, "additions": 1, "deletions": 0,
+            }
+
+        env = {"REVIEW_EVENT": override} if override is not None else {}
+        with patch("scripts.review_pr.api_request", side_effect=fake_api), \
+             patch.dict(os.environ, env, clear=False), \
+             patch("builtins.open", mock_open(read_data=json.dumps(findings))), \
+             patch("sys.stdout", new_callable=io.StringIO):
+            if override is None:
+                os.environ.pop("REVIEW_EVENT", None)
+            cmd_post("https://github.com/u/r/pull/1", "findings.json")
+        return sent[0]
+
+    def test_default_warning_still_blocks(self):
+        self.assertEqual(self._cmd_post_event(["warning"]), "REQUEST_CHANGES")
+
+    def test_override_demotes_warning_to_comment(self):
+        self.assertEqual(
+            self._cmd_post_event(["warning"], override="COMMENT"), "COMMENT"
+        )
+
+    def test_override_is_case_insensitive(self):
+        self.assertEqual(
+            self._cmd_post_event(["warning"], override="comment"), "COMMENT"
+        )
+
+    def test_override_can_force_approve(self):
+        self.assertEqual(self._cmd_post_event([], override="APPROVE"), "APPROVE")
+
+    def test_invalid_override_raises(self):
+        with self.assertRaises(ReviewError):
+            self._cmd_post_event(["warning"], override="LGTM")
 
 
 class TestIntegrationParseDiffAndSnap(unittest.TestCase):

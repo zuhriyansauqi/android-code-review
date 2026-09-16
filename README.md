@@ -35,6 +35,14 @@ Give the agent a GitHub PR URL. The skill will:
 | Any blocker or warning | ❌ Request Changes |
 | Only suggestions/nits | 💬 Comment |
 
+Override with `REVIEW_EVENT` when your findings are questions rather than demonstrated defects — `REQUEST_CHANGES` blocks a merge on a protected branch:
+
+```bash
+REVIEW_EVENT=COMMENT uv run python scripts/review_pr.py post "<PR_URL>" findings.json
+```
+
+Accepted values: `APPROVE`, `COMMENT`, `REQUEST_CHANGES`. See `SKILL.md` for when to use it.
+
 ## Severity Levels
 
 - **blocker** — Must fix before merge

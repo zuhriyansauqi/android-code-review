@@ -23,7 +23,7 @@ import time
 import urllib.request
 import urllib.error
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 API_TIMEOUT = 30
 MAX_LINE_SNAP_DISTANCE = 20
 
@@ -307,6 +307,19 @@ def cmd_post(pr_url, findings_file):
         event = "COMMENT"
     else:
         event = "APPROVE"
+
+    # Explicit override, e.g. REVIEW_EVENT=COMMENT to report findings without blocking
+    # a merge. Use it when the findings are questions the diff cannot answer rather
+    # than demonstrated defects - REQUEST_CHANGES is a merge-blocking state on a
+    # protected branch and should mean "must fix", not "please confirm".
+    override = (os.environ.get("REVIEW_EVENT") or "").strip().upper()
+    if override:
+        if override not in ("APPROVE", "COMMENT", "REQUEST_CHANGES"):
+            raise ReviewError(
+                f"Invalid REVIEW_EVENT={override!r}; expected APPROVE, COMMENT or REQUEST_CHANGES."
+            )
+        print(f"Verdict override: {event} -> {override} (REVIEW_EVENT)", file=sys.stderr)
+        event = override
 
     # Post atomic review
     review = {
